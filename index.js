@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const app = express();
 
 app.use(cors());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true }));  // para form data
 app.use(express.json());
 
 app.use('/public', express.static(`${__dirname}/public`));
@@ -13,15 +13,13 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html');
 });
 
-// Conexión a MongoDB usando variable de entorno
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(() => console.log('MongoDB conectado'))
-  .catch(err => console.error('Error conectando a MongoDB:', err));
+  .catch(err => console.error(err));
 
 // MODELOS
-
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true }
 });
@@ -38,49 +36,44 @@ const Exercise = mongoose.model('Exercise', exerciseSchema);
 
 // RUTAS
 
-// 1. Crear usuario - POST /api/users
+// Crear usuario
 app.post('/api/users', async (req, res) => {
-  try {
-    const username = req.body.username;
-    if (!username) return res.status(400).json({ error: 'Username required' });
+  const username = req.body.username;
+  if (!username) return res.status(400).json({ error: 'Username required' });
 
+  try {
     const user = new User({ username });
     await user.save();
-
-    res.json({ username: user.username, _id: user._id });
-  } catch (err) {
+    res.json({ username: user.username, _id: user._id.toString() });
+  } catch {
     res.status(500).json({ error: 'Error creando usuario' });
   }
 });
 
-// 2. Obtener todos los usuarios - GET /api/users
+// Obtener todos los usuarios
 app.get('/api/users', async (req, res) => {
   try {
     const users = await User.find({}, 'username _id').exec();
-    res.json(users);
-  } catch (err) {
+    const usersFormatted = users.map(u => ({ username: u.username, _id: u._id.toString() }));
+    res.json(usersFormatted);
+  } catch {
     res.status(500).json({ error: 'Error obteniendo usuarios' });
   }
 });
 
-// 3. Añadir ejercicio - POST /api/users/:_id/exercises
+// Añadir ejercicio
 app.post('/api/users/:_id/exercises', async (req, res) => {
+  const userId = req.params._id;
+  const { description, duration, date } = req.body;
+
+  if (!description || !duration) return res.status(400).json({ error: 'Description and duration required' });
+
   try {
-    const userId = req.params._id;
-    const { description, duration, date } = req.body;
-
-    if (!description || !duration) {
-      return res.status(400).json({ error: 'Description and duration required' });
-    }
-
-    // Validar usuario existe
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Fecha por defecto: hoy si no envían
     const exerciseDate = date ? new Date(date) : new Date();
-    // Formatear fecha para que sea válida
-    if (isNaN(exerciseDate)) return res.status(400).json({ error: 'Invalid date format' });
+    if (isNaN(exerciseDate)) return res.status(400).json({ error: 'Invalid date' });
 
     const exercise = new Exercise({
       userId,
@@ -92,40 +85,36 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
     await exercise.save();
 
     res.json({
-      _id: user._id,
+      _id: user._id.toString(),
       username: user.username,
       date: exercise.date.toDateString(),
       duration: exercise.duration,
       description: exercise.description
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Error creando ejercicio' });
   }
 });
 
-// 4. Obtener logs - GET /api/users/:_id/logs
-// Soporta query params: from, to, limit
+// Obtener logs
 app.get('/api/users/:_id/logs', async (req, res) => {
-  try {
-    const userId = req.params._id;
-    const { from, to, limit } = req.query;
+  const userId = req.params._id;
+  const { from, to, limit } = req.query;
 
-    // Buscar usuario
+  try {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Construir filtro de fechas
-    let dateFilter = {};
-    if (from) dateFilter.$gte = new Date(from);
-    if (to) dateFilter.$lte = new Date(to);
+    let filter = { userId };
 
-    const filter = {
-      userId,
-      ...(from || to ? { date: dateFilter } : {})
-    };
+    if (from || to) {
+      filter.date = {};
+      if (from) filter.date.$gte = new Date(from);
+      if (to) filter.date.$lte = new Date(to);
+    }
 
-    // Consulta con límite si existe
     let query = Exercise.find(filter).select('description duration date -_id');
+
     if (limit) query = query.limit(Number(limit));
 
     const exercises = await query.exec();
@@ -137,18 +126,16 @@ app.get('/api/users/:_id/logs', async (req, res) => {
     }));
 
     res.json({
-      _id: user._id,
+      _id: user._id.toString(),
       username: user.username,
       count: log.length,
       log
     });
-
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Error obteniendo logs' });
   }
 });
 
-// Puerto
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor funcionando en http://localhost:${PORT}`);
