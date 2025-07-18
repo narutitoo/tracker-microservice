@@ -1,14 +1,65 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Exercise Tracker</title>
-  </head>
-  <body>
-    <h1>Exercise Tracker</h1>
-    <form action="/api/users" method="post">
-      <label for="username">New Username:</label>
-      <input type="text" name="username" required>
-      <button type="submit">Create User</button>
-    </form>
-  </body>
+<head>
+  <title>Exercise Tracker</title>
+</head>
+<body>
+  <h1>Exercise Tracker</h1>
+  
+  <form action="/api/users" method="post">
+    <label>New Username:</label>
+    <input type="text" name="username" required>
+    <button type="submit">Create User</button>
+  </form>
+
+  <hr>
+
+  <h2>Add Exercise</h2>
+  <form id="exercise-form" method="post">
+    <label>User ID:</label>
+    <input type="text" name="_id" required>
+    <br>
+    <label>Description:</label>
+    <input type="text" name="description" required>
+    <br>
+    <label>Duration (minutes):</label>
+    <input type="number" name="duration" required>
+    <br>
+    <label>Date (optional):</label>
+    <input type="date" name="date">
+    <br>
+    <button type="submit">Add Exercise</button>
+  </form>
+
+  <script>
+    // Formulario para enviar ejercicio a /api/users/:_id/exercises
+    const form = document.getElementById('exercise-form');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const _id = formData.get('_id');
+      const description = formData.get('description');
+      const duration = formData.get('duration');
+      const date = formData.get('date');
+
+      const data = new URLSearchParams();
+      data.append('description', description);
+      data.append('duration', duration);
+      if(date) data.append('date', date);
+
+      try {
+        const res = await fetch(`/api/users/${_id}/exercises`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: data.toString()
+        });
+        const json = await res.json();
+        alert(JSON.stringify(json));
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+  </script>
+
+</body>
 </html>
